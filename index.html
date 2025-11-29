@@ -66,8 +66,9 @@
         const REPO_BRANCH = 'main'; 
 
         // URL Sumber Data Ganda
-        const JSON_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/result-quax.json`; // Data Lama
-        const GITHUB_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/uploads`; // Data Baru (Folder)
+        const JSON_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/result-quax.json`; // Data Lama (Qu.ax)
+        // URL untuk metadata upload GitHub (Data Baru)
+        const INDEX_JSON_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/gallery-index.json`; 
 
         // =======================================================
 
@@ -126,7 +127,7 @@
             }
 
             selectedFile = file;
-            fileStatus.innerHTML = `File terpilih: <strong>${file.name}</strong> (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            fileStatus.innerHTML = `File terpilih: <strong>${file.name}</strong> (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`;
             customNameContainer.style.display = "block";
             uploadBtn.disabled = false;
             showStatus("Siap diunggah.", "success");
@@ -181,24 +182,13 @@
                 if (apiResult.success && apiResult.url) {
                     const githubUrl = apiResult.url;
                     
-                    const urlParts = githubUrl.split('/');
-                    const fileName = urlParts[urlParts.length - 1]; 
-                    
-                    const newImageEntry = {
-                        // Struktur data baru, konsisten dengan format gallery
-                        id: Date.now(), 
-                        name: fileName, 
-                        download_url: githubUrl, 
-                        
-                        original_name: apiResult.original_name, 
-                        uploaded_at: apiResult.uploaded_at,    
-                        short_code: apiResult.short_code,      
-                        source: 'github_upload' // Tambahkan sumber data
-                    };
+                    // Struktur data yang dikembalikan server sudah lengkap dengan metadata
+                    const newImageEntry = apiResult;
 
                     progressBar.style.width = "100%";
                     showStatus(`Upload ke GitHub **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
                     
+                    // Tambahkan data lengkap ke Galeri
                     addNewItemToGallery(newImageEntry);
                     
                     resetForm();
@@ -216,7 +206,7 @@
         }
 
         // =======================================================
-        // LOAD & RENDER GALLERY (MEMBACA DARI DUA SUMBER)
+        // LOAD & RENDER GALLERY (MEMBACA DARI DUA SUMBER JSON)
         // =======================================================
         
         function renderGallery() {
@@ -225,22 +215,28 @@
                 return;
             }
 
-            // Sorting dilakukan di loadGallery, tinggal render
-            
+            // Urutkan berdasarkan ID (timestamp) terbaru di atas
+            galleryData.sort((a, b) => b.id.localeCompare(a.id)); 
+
             galleryGrid.innerHTML = galleryData.map(image => {
-                const displayUrl = image.download_url; // Selalu pakai download_url
-                const fileName = image.name || 'N/A'; // Pastikan ada nama
+                const displayUrl = image.download_url || image.url; // Gunakan download_url atau fallback ke url
                 
-                // Gunakan original_name jika ada, atau buat dari fileName
-                const originalName = image.original_name || fileName.replace(/\.[^/.]+$/, ""); 
+                // Gunakan original_name jika ada, jika tidak, gunakan nama file yang dinormalisasi
+                const originalName = image.original_name || (image.name ? image.name.replace(/\.[^/.]+$/, "") : 'Gambar'); 
+                const code = image.id; 
                 
-                // Gunakan id untuk sorting
-                const code = image.id || fileName.split('.')[0]; 
-                
+                // Format tanggal agar terlihat bagus
+                const displayDate = image.uploaded_at 
+                    ? new Date(image.uploaded_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: '2-digit', minute: '2-digit' }) 
+                    : 'Tanggal Tidak Tersedia';
+
                 // Tentukan sumber untuk tampilan
                 const sourceBadge = image.source === 'quax_json' 
-                    ? '<span style="color:var(--accent);font-weight:700;margin-left:5px;">(Qu.ax)</span>' 
+                    ? '<span style="color:var(--accent);font-weight:700;margin-left:5px;font-size:0.75rem;">(Qu.ax)</span>' 
                     : '';
+                
+                const fileNameDisplay = image.source === 'github_upload' ? image.name : 'Qu.ax Link';
+
 
                 if (!displayUrl || !code) return '';
 
@@ -252,7 +248,7 @@
                             </div>
                             <div class="item-info">
                                 <div class="item-name">${originalName} ${sourceBadge}</div>
-                                <div class="item-date">File: ${fileName}</div>
+                                <div class="item-date">Diunggah: ${displayDate}</div>
                             </div>
                         </a>
                     </div>
@@ -261,53 +257,57 @@
         }
 
         async function loadGallery(){
-            galleryGrid.innerHTML = `<div class="loading"></div><p>Memuat galeri dari GitHub dan JSON lama...</p>`;
+            galleryGrid.innerHTML = `<div class="loading"></div><p>Memuat galeri dari JSON lama dan JSON indeks baru...</p>`;
             try {
                 // Lakukan dua fetch secara paralel
-                const [uploadsResponse, jsonResponse] = await Promise.all([
-                    fetch(GITHUB_API_URL), // Data Baru: Isi folder uploads/
+                const [indexResponse, jsonResponse] = await Promise.all([
+                    fetch(INDEX_JSON_URL), // Data Baru: gallery-index.json
                     fetch(JSON_URL)       // Data Lama: result-quax.json
                 ]);
                 
-                // 1. Ambil Data Baru (Folder Uploads)
-                const fileList = uploadsResponse.ok ? await uploadsResponse.json() : [];
-
+                // 1. Ambil Data Baru (gallery-index.json)
+                let newUploads = [];
+                if (indexResponse.ok) {
+                     try {
+                        newUploads = await indexResponse.json();
+                        newUploads = newUploads
+                            .map(item => ({
+                                ...item, 
+                                source: 'github_upload', 
+                                // Pastikan ID adalah string untuk sorting dan ada
+                                id: (item.id || item.short_code || Date.now()).toString(), 
+                                download_url: item.download_url || item.url // Fallback
+                            }))
+                            .filter(item => item.download_url); // Filter data rusak
+                    } catch (e) {
+                        console.warn("JSON Index baru (gallery-index.json) kosong atau invalid. Mengabaikan.", e.message);
+                    }
+                }
+                
                 // 2. Ambil Data Lama (result-quax.json)
                 let oldQuaxData = [];
                 if (jsonResponse.ok) {
                     try {
                         oldQuaxData = await jsonResponse.json();
                     } catch (e) {
-                        console.warn("JSON lama (result-quax.json) kosong atau invalid.");
+                        console.warn("JSON lama (result-quax.json) kosong atau invalid. Mengabaikan.", e.message);
                     }
                 }
                 
-                // 3. Normalisasi Data Baru (Folder Uploads)
-                const newUploads = fileList
-                    .filter(item => item.type === 'file' && item.name.match(/\.(jpe?g|png|gif)$/i))
-                    .map(item => ({
-                        // Normalisasi ke struktur yang mudah di-render
-                        id: item.name.split('.')[0], // Timestamp sebagai ID
-                        name: item.name,
-                        download_url: item.download_url,
-                        original_name: item.name.replace(/\.[^/.]+$/, ""),
-                        source: 'github_upload'
-                    }));
-
-                // 4. Normalisasi Data Lama (result-quax.json)
+                // 3. Normalisasi Data Lama (result-quax.json)
                 const oldData = oldQuaxData
-                    // Filter item yang memiliki URL dan ID (pastikan datanya valid)
                     .filter(item => item.quax_url && (item.id || item.short_code)) 
                     .map(item => ({
-                        // Normalisasi ke struktur yang mudah di-render
+                        // Normalisasi ke struktur gallery-index
                         id: (item.id || item.short_code).toString(),
-                        name: `quax_${(item.id || item.short_code)}.jpg`, // Nama file dummy untuk sorting
-                        download_url: item.quax_url, // URL Qu.ax
-                        original_name: item.original_name,
+                        name: `quax_${(item.id || item.short_code)}`, 
+                        download_url: item.quax_url, 
+                        original_name: item.original_name || 'Qu.ax Upload',
+                        uploaded_at: item.uploaded_at || new Date(parseInt(item.id || item.short_code)).toISOString(), // Coba ambil tanggal dari ID/shortcode
                         source: 'quax_json'
                     }));
 
-                // 5. Gabungkan dan Urutkan
+                // 4. Gabungkan dan Urutkan
                 galleryData = [...newUploads, ...oldData]; 
                 
                 // Urutkan berdasarkan ID (timestamp) terbaru di atas
