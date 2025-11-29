@@ -58,7 +58,7 @@
         // KONFIGURASI
         // =======================================================
         const JSON_URL = 'https://raw.githubusercontent.com/gipicihuy/ebd-gallery/refs/heads/main/result-quax.json';
-        const API_UPLOAD_ENDPOINT = '/api/upload-quax'; // Endpoint Vercel API Anda
+        const API_UPLOAD_ENDPOINT = '/api/upload-quax'; 
         const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
         // =======================================================
@@ -72,7 +72,6 @@
         const customNameContainer = document.getElementById("custom-name-container");
         const galleryGrid = document.getElementById("gallery-grid");
         
-        // List gambar lama yang dimuat dari JSON
         let galleryData = []; 
         let selectedFile = null;
 
@@ -135,13 +134,13 @@
         }
         
         function addNewItemToGallery(image) {
-            // Tambahkan gambar baru ke awal daftar
+            // Tambahkan gambar baru ke awal daftar (NON-PERSISTEN)
             galleryData.unshift(image); 
             renderGallery();
         }
 
         // =======================================================
-        // UPLOAD FILE KE VERCEL API
+        // UPLOAD FILE KE VERCEL API (QU.AX)
         // =======================================================
 
         async function uploadFile() {
@@ -160,7 +159,7 @@
                 const base64File = await readFileAsBase64(selectedFile);
 
                 progressBar.style.width = "30%";
-                showStatus("Mengunggah ke API Server...", "uploading");
+                showStatus("Mengunggah ke Qu.ax via API Server...", "uploading");
 
                 // 2. Panggil Vercel API (API_UPLOAD_ENDPOINT)
                 const apiResponse = await fetch(API_UPLOAD_ENDPOINT, {
@@ -177,9 +176,9 @@
                     const shortCode = generateShortCode(); 
 
                     progressBar.style.width = "100%";
-                    showStatus(`Upload & Data Tersimpan berhasil! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
+                    showStatus(`Upload berhasil! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
                     
-                    // 3. Tambahkan ke Galeri secara non-persisten
+                    // 3. Tambahkan ke Galeri (NON-PERSISTEN)
                     addNewItemToGallery({
                         id: Date.now(), 
                         original_name: originalFileName,
@@ -212,8 +211,12 @@
                 return;
             }
 
+            // Sortir data (yang terbaru di atas)
+            galleryData.sort((a, b) => (b.id || b.idx) - (a.id || a.idx)); 
+
             galleryGrid.innerHTML = galleryData.map(image => {
-                const displayUrl = image.quax_url || image.url;
+                // Gunakan quax_url jika ada, fallback ke url (data lama Supabase)
+                const displayUrl = image.quax_url || image.url; 
                 const uploadedDate = new Date(image.uploaded_at);
                 const formattedDate = uploadedDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
                 const code = image.short_code || image.id;
@@ -244,9 +247,6 @@
                 
                 galleryData = await response.json();
                 
-                // Urutkan berdasarkan id/idx menurun (terbaru di atas)
-                galleryData.sort((a, b) => (b.id || b.idx) - (a.id || a.idx)); 
-
                 renderGallery();
 
             } catch(e) {
@@ -283,7 +283,6 @@
 
         uploadBtn.addEventListener("click", uploadFile);
 
-        // Inisialisasi
         document.addEventListener("DOMContentLoaded", loadGallery);
     </script>
 </body>
