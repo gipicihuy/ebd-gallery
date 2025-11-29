@@ -11,7 +11,6 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // Pastikan hanya metode POST yang diizinkan
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -55,23 +54,34 @@ export default async function handler(req, res) {
       }
     });
 
-    // Ambil respons sebagai teks (Qu.ax tidak mengirim JSON)
-    const quaxResponseText = (await response.text()).trim();
-
-    if (!response.ok) {
-        // Jika Qu.ax memberikan status non-200 (error dari Qu.ax)
-        throw new Error(`Qu.ax upload failed (Status ${response.status}): ${quaxResponseText || 'No response body'}`);
+    // --- PERUBAHAN KRUSIAL DIMULAI DI SINI ---
+    
+    let quaxResult;
+    try {
+        // Coba baca respons sebagai JSON
+        quaxResult = await response.json();
+    } catch (e) {
+        // Jika gagal membaca sebagai JSON, ambil teks mentah untuk debugging
+        const rawText = await response.text();
+        throw new Error(`Qu.ax responded with non-JSON format: ${rawText.substring(0, 100)}...`);
     }
 
-    if (quaxResponseText && quaxResponseText.startsWith('http')) {
-      // SUCCESS: Respons adalah URL
-      res.status(200).json({
-        success: true,
-        url: quaxResponseText // URL Qu.ax
-      });
+    // 3. Ekstraksi URL dari JSON
+    if (quaxResult.success && quaxResult.files && quaxResult.files.length > 0) {
+      const quaxUrl = quaxResult.files[0].url;
+
+      if (quaxUrl && quaxUrl.startsWith('http')) {
+        // SUCCESS: Ditemukan URL yang valid di dalam JSON
+        res.status(200).json({
+          success: true,
+          url: quaxUrl // Kirim URL Qu.ax kembali ke client
+        });
+      } else {
+        throw new Error(`Qu.ax upload failed: URL not found in JSON result.`);
+      }
     } else {
-      // FAILURE: Respons 200 OK tapi bodynya bukan URL (misal: pesan error Qu.ax)
-      throw new Error(`Qu.ax upload failed: Response was not a valid URL. Response body: "${quaxResponseText.substring(0, 100)}..."`);
+      // Jika respons sukses: false atau tidak ada array files
+      throw new Error(`Qu.ax upload failed: ${JSON.stringify(quaxResult).substring(0, 100)}...`);
     }
 
   } catch (error) {
