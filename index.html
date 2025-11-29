@@ -84,7 +84,7 @@
         let galleryData = []; 
         let selectedFile = null;
 
-        // ... (Fungsi Utility dan Upload File Dihilangkan untuk mempersingkat tampilan, tidak ada perubahan) ...
+        // ... (Fungsi Utility lainnya) ...
         
         function readFileAsBase64(file) {
             return new Promise((resolve, reject) => {
@@ -136,6 +136,10 @@
             renderGallery();
         }
 
+        // =======================================================
+        // UPLOAD FILE KE GITHUB VIA VERCEL API
+        // =======================================================
+
         async function uploadFile() {
             if (!selectedFile) {
                 showStatus("Pilih file terlebih dahulu.", "error");
@@ -151,7 +155,8 @@
                 const base64File = await readFileAsBase64(selectedFile);
 
                 progressBar.style.width = "40%";
-                showStatus("Mengunggah dan menyimpan permanen ke GitHub...", "uploading");
+                // *** PERUBAHAN 1: Hapus penyebutan GitHub di pesan loading ***
+                showStatus("Mengunggah dan menyimpan file...", "uploading");
 
                 const apiResponse = await fetch(API_UPLOAD_ENDPOINT, {
                     method: 'POST',
@@ -179,14 +184,15 @@
                     const newImageEntry = apiResult;
 
                     progressBar.style.width = "100%";
-                    showStatus(`Upload ke GitHub **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
+                    // *** PERUBAHAN 2: Hapus penyebutan GitHub di pesan sukses ***
+                    showStatus(`Upload **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
                     
                     addNewItemToGallery(newImageEntry);
                     
                     resetForm();
 
                 } else {
-                    throw new Error(apiResult.details || 'Upload gagal - Tidak ada URL GitHub diterima.');
+                    throw new Error(apiResult.details || 'Upload gagal - Tidak ada URL diterima.');
                 }
 
             } catch (e) {
@@ -196,6 +202,7 @@
                 progressBar.style.width = "0%";
             }
         }
+
         // =======================================================
         // LOAD & RENDER GALLERY
         // =======================================================
@@ -206,6 +213,7 @@
                 return;
             }
 
+            // *** Pengurutan Sudah Benar (Descending, Terbaru di Atas) ***
             galleryData.sort((a, b) => b.id.localeCompare(a.id)); 
 
             galleryGrid.innerHTML = galleryData.map(image => {
@@ -239,13 +247,15 @@
         async function loadGallery(){
             galleryGrid.innerHTML = `<div class="loading"></div><p>Memuat galeri dari JSON lama dan JSON indeks baru...</p>`;
             try {
-                // Lakukan dua fetch secara paralel
+                // *** PERUBAHAN 3: Tambahkan Cache-Buster ke URL Fetch ***
+                const cacheBuster = `?t=${Date.now()}`;
+
                 const [indexResponse, jsonResponse] = await Promise.all([
-                    fetch(INDEX_JSON_URL), // Data Baru: gallery-index.json
-                    fetch(JSON_URL)       // Data Lama: result-quax.json
+                    fetch(INDEX_JSON_URL + cacheBuster), // Data Baru: gallery-index.json
+                    fetch(JSON_URL + cacheBuster)       // Data Lama: result-quax.json
                 ]);
                 
-                // 1. Ambil Data Baru (gallery-index.json)
+                // ... (Logika Parsing Data Tetap Sama)
                 let newUploads = [];
                 if (indexResponse.ok) {
                      try {
@@ -263,7 +273,6 @@
                     }
                 }
                 
-                // 2. Ambil Data Lama (result-quax.json)
                 let oldQuaxData = [];
                 if (jsonResponse.ok) {
                     try {
@@ -273,7 +282,6 @@
                     }
                 }
                 
-                // 3. Normalisasi Data Lama (result-quax.json)
                 const oldData = oldQuaxData
                     .filter(item => item.quax_url && (item.id || item.short_code)) 
                     .map(item => ({
@@ -288,6 +296,7 @@
                 // 4. Gabungkan dan Urutkan
                 galleryData = [...newUploads, ...oldData]; 
                 
+                // Pengurutan Final (Sudah Benar)
                 galleryData.sort((a, b) => b.id.localeCompare(a.id)); 
 
                 renderGallery();
