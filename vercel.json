@@ -2,22 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "server.js",
+      "src": "api/handler.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "public/**",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server.js"
+      "dest": "/api/handler.js"
     },
     {
-      "src": "/preview/(.*)",
-      "dest": "/public/index.html"
+      "src": "/public/(.*)",
+      "dest": "/public/$1"
     },
     {
       "src": "/(.*)",
@@ -25,7 +21,6 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production",
-    "PORT": "3000"
+    "WEBSITE_BASE_URL": "@website_base_url"
   }
 }
