@@ -1,0 +1,195 @@
+{
+  "name": "eberardos-uploader-quax",
+  "version": "2.0.0",
+  "description": "Image uploader using qu.ax instead of Supabase",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node migrate.js ./images_rows.json http://localhost:3000",
+    "migrate:prod": "node migrate.js ./images_rows.json https://your-production-url.com"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
+/**
+ * SETUP GUIDE - MIGRASI DARI SUPABASE KE QU.AX
+ * 
+ * ========================================
+ * STEP 1: INSTALL DEPENDENCIES
+ * ========================================
+ * npm install
+ * 
+ * ========================================
+ * STEP 2: EXPORT DATA DARI SUPABASE
+ * ========================================
+ * 1. Go to Supabase Dashboard
+ * 2. Select table "images"
+ * 3. Click "Export" → "JSON"
+ * 4. Save as "images_rows.json"
+ * 
+ * ========================================
+ * STEP 3: SETUP BACKEND (LOKAL)
+ * ========================================
+ * npm run dev
+ * Server akan jalan di http://localhost:3000
+ * 
+ * ========================================
+ * STEP 4: JALANKAN MIGRATION
+ * ========================================
+ * npm run migrate
+ * 
+ * Script akan:
+ * ✓ Download semua gambar dari Supabase URL
+ * ✓ Upload ke qu.ax
+ * ✓ Save hasil ke migration-results.json
+ * ✓ Bersihkan file lokal
+ * 
+ * Proses ini bisa butuh beberapa jam tergantung jumlah file
+ * 
+ * ========================================
+ * STEP 5: VERIFIKASI HASIL
+ * ========================================
+ * Buka: http://localhost:3000
+ * Lihat apakah gambar sudah ter-load dengan benar
+ * 
+ * Check migration-results.json untuk lihat status tiap file:
+ * - "status": "success" = berhasil
+ * - "status": "failed" = gagal (lihat "error")
+ * 
+ * ========================================
+ * STEP 6: DEPLOY KE PRODUCTION
+ * ========================================
+ * 
+ * Option A: Deploy ke Vercel
+ * ─────────────────────────────
+ * 1. Push ke GitHub
+ * 2. Connect ke Vercel
+ * 3. Set environment variable: WEBSITE_BASE_URL
+ * 4. Deploy!
+ * 
+ * Option B: Deploy ke Railway.app
+ * ────────────────────────────────
+ * 1. Connect GitHub
+ * 2. Select project
+ * 3. Set PORT dan WEBSITE_BASE_URL
+ * 4. Deploy!
+ * 
+ * Option C: Deploy ke Heroku
+ * ───────────────────────────
+ * 1. npm install -g heroku
+ * 2. heroku login
+ * 3. heroku create
+ * 4. heroku config:set WEBSITE_BASE_URL=https://your-app.herokuapp.com
+ * 5. git push heroku main
+ * 
+ * ========================================
+ * FILE STRUCTURE
+ * ========================================
+ * project/
+ * ├── server.js              (Backend API)
+ * ├── migrate.js             (Migration script)
+ * ├── package.json
+ * ├── public/
+ * │   └── index.html         (Frontend)
+ * ├── uploads/               (Temporary files)
+ * ├── migration-results.json (Migration log)
+ * └── images_rows.json       (Supabase export)
+ * 
+ * ========================================
+ * ENVIRONMENT VARIABLES (.env)
+ * ========================================
+ * PORT=3000
+ * WEBSITE_BASE_URL=http://localhost:3000 # atau https://your-domain.com
+ * 
+ * ========================================
+ * TIPS & TROUBLESHOOTING
+ * ========================================
+ * 
+ * Q: Upload terlalu lambat?
+ * A: Qu.ax punya rate limit. Script sudah ada delay 1 detik per file.
+ *    Kalau masih lambat, naikkan delay di migrate.js line:
+ *    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 detik
+ * 
+ * Q: Banyak file yang failed?
+ * A: Kemungkinan:
+ *    - URL Supabase expired
+ *    - File size terlalu besar (qu.ax limit 200MB tapi mostly untuk upload besar)
+ *    - Network timeout
+ *    Retry bisa dilakukan manual untuk file yang failed
+ * 
+ * Q: Gimana cara import old database?
+ * A: Edit server.js, ganti imageDatabase dengan import dari file JSON/database
+ * 
+ * Q: Bisa batch delete semua gambar?
+ * A: Belum ada endpoint untuk itu. Tapi bisa tambah:
+ *    app.delete('/api/images/all', (req, res) => {
+ *        imageDatabase.length = 0;
+ *        res.json({ cleared: true });
+ *    });
+ * 
+ * ========================================
+ * API ENDPOINTS
+ * ========================================
+ * 
+ * POST   /api/images/upload
+ *        Upload single image
+ *        Body: multipart/form-data { file }
+ * 
+ * GET    /api/images
+ *        Get all images (sorted by date)
+ * 
+ * GET    /api/images/:shortCode
+ *        Get image by short code
+ * 
+ * DELETE /api/images/:id
+ *        Delete image by ID
+ * 
+ * POST   /api/images/migrate
+ *        Batch import dari migrasi
+ *        Body: { images: [...] }
+ * 
+ * GET    /api/health
+ *        Health check
+ * 
+ * ========================================
+ * KELEBIHAN QU.AX vs SUPABASE
+ * ========================================
+ * 
+ * ✅ Unlimited file storage (as long as qu.ax exists)
+ * ✅ No storage limit like Supabase free tier
+ * ✅ Cepat & reliable
+ * ✅ CDN distribution
+ * ✅ Gratis selamanya
+ * ✅ Direct image URL (no login needed)
+ * 
+ * ⚠️ Trade-offs:
+ * ⚠️ Qu.ax bisa down (tapi jarang)
+ * ⚠️ File tidak bisa dihapus dari qu.ax (permanent)
+ * ⚠️ No control atas infrastructure
+ * 
+ * ========================================
+ * NEXT STEPS
+ * ========================================
+ * 
+ * 1. Update frontend untuk preview share
+ * 2. Add database persistence (MongoDB, PostgreSQL, SQLite)
+ * 3. Add authentication untuk upload
+ * 4. Add analytics/logging
+ * 5. Setup backup system
+ * 6. Add compression untuk image
+ * 7. Add image optimization before upload
+ */
