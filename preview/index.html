@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eberardos Preview</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="https://i.ibb.co/r2KDVBJC/IMG-20241225-WA0318.jpg" type="image/jpeg">
+    <style>
+:root{--primary:#e63946;--primary-dark:#d90429;--secondary:#2b2d42;--secondary-light:#414563;--accent:#fca311;--light:#f8f9fa;--dark:#212529;--gray:#8d99ae;--success:#2a9d8f;--error:#e63946}*{margin:0;padding:0;box-sizing:border-box;font-family:"Poppins","Segoe UI",Tahoma,Geneva,Verdana,sans-serif}body{background:linear-gradient(135deg,#0c0c0c 0%,#2b2d42 100%);color:var(--light);line-height:1.6;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}.container{max-width:800px;width:100%;background:rgba(43,45,66,0.9);backdrop-filter:blur(10px);padding:30px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);text-align:center;margin:0 auto}h1{font-size:2.5rem;margin-bottom:20px;font-weight:800;background:linear-gradient(90deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 2px 10px rgba(230,57,70,0.3)}.image-container{margin:20px 0;border-radius:12px;overflow:hidden;box-shadow:0 5px 25px rgba(0,0,0,0.3)}.preview-image{max-width:100%;max-height:60vh;object-fit:contain}.image-info{margin:20px 0;text-align:left;background:rgba(33,37,41,0.6);padding:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.1)}.image-name{font-size:1.5rem;font-weight:700;margin-bottom:10px;color:var(--light)}.image-date{color:var(--gray);margin-bottom:15px}.btn{background:rgba(255,255,255,0.2);color:white;border:none;text-decoration:none;padding:10px 20px;border-radius:50px;cursor:pointer;font-size:16px;transition:all .3s ease;display:inline-flex;align-items:center;justify-content:center;gap:8px;backdrop-filter:blur(10px);text-align:center;min-width:120px}.btn:hover{background:rgba(255,255,255,0.3)}.btn-secondary{background:transparent;border:2px solid var(--primary);color:var(--primary)}.loading{display:inline-block;width:30px;height:30px;border:3px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin 1s ease-in-out infinite;margin:20px}@keyframes spin{to{transform:rotate(360deg)}}.error-message{color:var(--error);margin:20px 0;padding:15px;background:rgba(230,57,70,0.2);border:1px solid rgba(230,57,70,0.3);border-radius:8px}footer{text-align:center;padding:20px;margin-top:40px;color:var(--gray)}@media (max-width:768px){.container{padding:20px}h1{font-size:2rem}.btn{padding:10px 20px;font-size:14px}}::-webkit-scrollbar{width:10px}::-webkit-scrollbar-track{background:rgba(43,45,66,0.5)}::-webkit-scrollbar-thumb{background:var(--primary);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:var(--primary-dark)}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Eberardos Preview</h1>
+        <div id="image-content">
+            <div class="loading"></div>
+            <p>Memuat gambar...</p>
+        </div>
+        <div id="action-buttons" style="display: none;">
+            <a href="/" class="btn">
+                <i class="fas fa-arrow-left"></i> Gallery
+            </a>
+            <a id="download-btn" class="btn">
+                <i class="fas fa-download"></i> Download
+            </a>
+        </div>
+    </div>
+    <footer>
+        <p>Eberardos Uploader &copy; 2025</p>
+    </footer>
+
+    <script>
+        const supabaseUrl="https://hcdmotcyklhdttadpddo.supabase.co",supabaseKey="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZG1vdGN5a2xoZHR0YWRwZGRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3ODY2MjcsImV4cCI6MjA3MTM2MjYyN30.ia-iUhJsKXljHZbxrGsqp94X1EatkmqmFsIXsnZpwPk",supabase=window.supabase.createClient(supabaseUrl,supabaseKey);
+        
+        // Mendapatkan kode gambar dari path URL
+        const pathSegments = window.location.pathname.split('/').filter(segment => segment);
+        const imageCode = pathSegments[pathSegments.length - 1];
+        
+        const imageContent=document.getElementById("image-content"),actionButtons=document.getElementById("action-buttons"),downloadBtn=document.getElementById("download-btn");
+        
+        async function loadImage(){
+            if(!imageCode)return void showError("Kode gambar tidak valid.");
+            try{
+                const{data:e,error:t}=await supabase.from("images").select("*").eq("short_code",imageCode).single();
+                if(t)throw t;
+                if(!e)return void showError("Gambar tidak ditemukan.");
+                displayImage(e)
+            }catch(e){
+                console.error("Error loading image:",e),showError("Gagal memuat gambar. Silakan coba lagi.")
+            }
+        }
+        
+        function displayImage(e){
+            const t=new Date(e.uploaded_at),n=t.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+            imageContent.innerHTML=`<div class="image-container"><img src="${e.url}" alt="${e.original_name}" class="preview-image"></div><div class="image-info"><div class="image-name">${e.original_name}</div><div class="image-date">Diupload: ${n}</div></div>`,downloadBtn.onclick=function(){downloadImage(e)},actionButtons.style.display="block",setMetaTags(e)
+        }
+        
+        function downloadImage(e){
+            fetch(e.url).then(e=>e.blob()).then(t=>{
+                const n=URL.createObjectURL(t),o=document.createElement("a");
+                o.href=n,o.download=e.original_name||"download",document.body.appendChild(o),o.click(),setTimeout(()=>{document.body.removeChild(o),URL.revokeObjectURL(n)},100)
+            }).catch(t=>{
+                console.error("Error downloading image:",t);
+                const n=document.createElement("a");
+                n.href=e.url,n.download=e.original_name||"download",document.body.appendChild(n),n.click(),document.body.removeChild(n)
+            })
+        }
+        
+        function setMetaTags(e){
+            document.title=`${e.original_name} - Eberardos Gallery`;
+            const t=[{property:"og:title",content:`${e.original_name} - Eberardos Gallery`},{property:"og:description",content:"Lihat gambar ini di Eberardos Gallery"},{property:"og:image",content:e.url},{property:"og:url",content:window.location.href},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"},{name:"twitter:title",content:`${e.original_name} - Eberardos Gallery`},{name:"twitter:description",content:"Lihat gambar ini di Eberardos Gallery"},{name:"twitter:image",content:e.url}];
+            t.forEach(t=>{
+                let n=document.querySelector(`meta[property="${t.property}"]`)||document.querySelector(`meta[name="${t.name}"]`);
+                n||(n=document.createElement("meta"),t.property?n.setAttribute("property",t.property):t.name&&n.setAttribute("name",t.name),document.head.appendChild(n)),t.property?n.setAttribute("content",t.content):t.name&&n.setAttribute("content",t.content)
+            })
+        }
+        
+        function showError(e){
+            imageContent.innerHTML=`<div class="error-message"><i class="fas fa-exclamation-circle"></i><p>${e}</p></div>`
+        }
+        
+        document.addEventListener("DOMContentLoaded",loadImage);
+    </script>
+</body>
+</html>
