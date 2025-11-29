@@ -182,13 +182,11 @@
                 if (apiResult.success && apiResult.url) {
                     const githubUrl = apiResult.url;
                     
-                    // Struktur data yang dikembalikan server sudah lengkap dengan metadata
                     const newImageEntry = apiResult;
 
                     progressBar.style.width = "100%";
                     showStatus(`Upload ke GitHub **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
                     
-                    // Tambahkan data lengkap ke Galeri
                     addNewItemToGallery(newImageEntry);
                     
                     resetForm();
@@ -206,7 +204,7 @@
         }
 
         // =======================================================
-        // LOAD & RENDER GALLERY (MEMBACA DARI DUA SUMBER JSON)
+        // LOAD & RENDER GALLERY
         // =======================================================
         
         function renderGallery() {
@@ -215,28 +213,19 @@
                 return;
             }
 
-            // Urutkan berdasarkan ID (timestamp) terbaru di atas
             galleryData.sort((a, b) => b.id.localeCompare(a.id)); 
 
             galleryGrid.innerHTML = galleryData.map(image => {
-                const displayUrl = image.download_url || image.url; // Gunakan download_url atau fallback ke url
+                const displayUrl = image.download_url || image.url; 
                 
-                // Gunakan original_name jika ada, jika tidak, gunakan nama file yang dinormalisasi
                 const originalName = image.original_name || (image.name ? image.name.replace(/\.[^/.]+$/, "") : 'Gambar'); 
                 const code = image.id; 
                 
-                // Format tanggal agar terlihat bagus
                 const displayDate = image.uploaded_at 
                     ? new Date(image.uploaded_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: '2-digit', minute: '2-digit' }) 
                     : 'Tanggal Tidak Tersedia';
 
-                // Tentukan sumber untuk tampilan
-                const sourceBadge = image.source === 'quax_json' 
-                    ? '<span style="color:var(--accent);font-weight:700;margin-left:5px;font-size:0.75rem;">(Qu.ax)</span>' 
-                    : '';
-                
-                const fileNameDisplay = image.source === 'github_upload' ? image.name : 'Qu.ax Link';
-
+                // *** CATATAN: sourceBadge Dihapus Sesuai Permintaan ***
 
                 if (!displayUrl || !code) return '';
 
@@ -247,8 +236,7 @@
                                 <img src="${displayUrl}" alt="${originalName}" loading="lazy" class="item-image">
                             </div>
                             <div class="item-info">
-                                <div class="item-name">${originalName} ${sourceBadge}</div>
-                                <div class="item-date">Diunggah: ${displayDate}</div>
+                                <div class="item-name">${originalName}</div> <div class="item-date">Diunggah: ${displayDate}</div>
                             </div>
                         </a>
                     </div>
@@ -274,11 +262,10 @@
                             .map(item => ({
                                 ...item, 
                                 source: 'github_upload', 
-                                // Pastikan ID adalah string untuk sorting dan ada
                                 id: (item.id || item.short_code || Date.now()).toString(), 
-                                download_url: item.download_url || item.url // Fallback
+                                download_url: item.download_url || item.url
                             }))
-                            .filter(item => item.download_url); // Filter data rusak
+                            .filter(item => item.download_url);
                     } catch (e) {
                         console.warn("JSON Index baru (gallery-index.json) kosong atau invalid. Mengabaikan.", e.message);
                     }
@@ -298,19 +285,17 @@
                 const oldData = oldQuaxData
                     .filter(item => item.quax_url && (item.id || item.short_code)) 
                     .map(item => ({
-                        // Normalisasi ke struktur gallery-index
                         id: (item.id || item.short_code).toString(),
                         name: `quax_${(item.id || item.short_code)}`, 
                         download_url: item.quax_url, 
                         original_name: item.original_name || 'Qu.ax Upload',
-                        uploaded_at: item.uploaded_at || new Date(parseInt(item.id || item.short_code)).toISOString(), // Coba ambil tanggal dari ID/shortcode
+                        uploaded_at: item.uploaded_at || new Date(parseInt(item.id || item.short_code)).toISOString(),
                         source: 'quax_json'
                     }));
 
                 // 4. Gabungkan dan Urutkan
                 galleryData = [...newUploads, ...oldData]; 
                 
-                // Urutkan berdasarkan ID (timestamp) terbaru di atas
                 galleryData.sort((a, b) => b.id.localeCompare(a.id)); 
 
                 renderGallery();
