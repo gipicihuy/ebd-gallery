@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eberardos Preview</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="https://i.ibb.co/r2KDVBJC/IMG-20241225-WA0318.jpg" type="image/jpeg">
     <style>
@@ -32,7 +31,8 @@
     </footer>
 
     <script>
-        const supabaseUrl="https://hcdmotcyklhdttadpddo.supabase.co",supabaseKey="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjZG1vdGN5a2xoZHR0YWRwZGRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3ODY2MjcsImV4cCI6MjA3MTM2MjYyN30.ia-iUhJsKXljHZbxrGsqp94X1EatkmqmFsIXsnZpwPk",supabase=window.supabase.createClient(supabaseUrl,supabaseKey);
+        // URL ke file JSON Anda
+        const JSON_URL = 'https://raw.githubusercontent.com/gipicihuy/ebd-gallery/refs/heads/main/result-quax.json';
         
         // Mendapatkan kode gambar dari path URL
         const pathSegments = window.location.pathname.split('/').filter(segment => segment);
@@ -41,36 +41,77 @@
         const imageContent=document.getElementById("image-content"),actionButtons=document.getElementById("action-buttons"),downloadBtn=document.getElementById("download-btn");
         
         async function loadImage(){
-            if(!imageCode)return void showError("Kode gambar tidak valid.");
+            if(!imageCode) return void showError("Kode gambar tidak valid.");
+            
             try{
-                const{data:e,error:t}=await supabase.from("images").select("*").eq("short_code",imageCode).single();
-                if(t)throw t;
-                if(!e)return void showError("Gambar tidak ditemukan.");
-                displayImage(e)
-            }catch(e){
-                console.error("Error loading image:",e),showError("Gagal memuat gambar. Silakan coba lagi.")
+                // Ambil data JSON
+                const response = await fetch(JSON_URL);
+                if (!response.ok) throw new Error("Gagal memuat data JSON.");
+                
+                const allImages = await response.json();
+
+                // Cari gambar berdasarkan short_code
+                const image = allImages.find(img => img.short_code === imageCode);
+
+                if(!image) {
+                    return showError("Gambar tidak ditemukan.");
+                }
+                
+                // Gunakan quax_url, fallback ke url Supabase lama jika quax_url null
+                const displayUrl = image.quax_url || image.url;
+
+                if (!displayUrl) {
+                    return showError("URL gambar tidak ditemukan.");
+                }
+
+                displayImage(image, displayUrl);
+                
+            } catch(e){
+                console.error("Error loading image:", e);
+                showError("Gagal memuat gambar. Silakan coba lagi.");
             }
         }
         
-        function displayImage(e){
-            const t=new Date(e.uploaded_at),n=t.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
-            imageContent.innerHTML=`<div class="image-container"><img src="${e.url}" alt="${e.original_name}" class="preview-image"></div><div class="image-info"><div class="image-name">${e.original_name}</div><div class="image-date">Diupload: ${n}</div></div>`,downloadBtn.onclick=function(){downloadImage(e)},actionButtons.style.display="block",setMetaTags(e)
+        function displayImage(e, urlToUse){
+            const t=new Date(e.uploaded_at);
+            const n=t.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+            
+            // Menggunakan urlToUse (quax_url) untuk gambar
+            imageContent.innerHTML=`<div class="image-container"><img src="${urlToUse}" alt="${e.original_name}" class="preview-image"></div><div class="image-info"><div class="image-name">${e.original_name}</div><div class="image-date">Diupload: ${n}</div></div>`;
+            
+            // Menggunakan urlToUse (quax_url) untuk tombol download
+            downloadBtn.onclick=function(){downloadImage(e, urlToUse)};
+            actionButtons.style.display="block";
+            setMetaTags(e, urlToUse);
         }
         
-        function downloadImage(e){
-            fetch(e.url).then(e=>e.blob()).then(t=>{
+        function downloadImage(e, urlToDownload){
+            // Menggunakan urlToDownload (quax_url)
+            fetch(urlToDownload).then(e=>e.blob()).then(t=>{
                 const n=URL.createObjectURL(t),o=document.createElement("a");
                 o.href=n,o.download=e.original_name||"download",document.body.appendChild(o),o.click(),setTimeout(()=>{document.body.removeChild(o),URL.revokeObjectURL(n)},100)
             }).catch(t=>{
                 console.error("Error downloading image:",t);
                 const n=document.createElement("a");
-                n.href=e.url,n.download=e.original_name||"download",document.body.appendChild(n),n.click(),document.body.removeChild(n)
+                n.href=urlToDownload,n.download=e.original_name||"download",document.body.appendChild(n),n.click(),document.body.removeChild(n)
             })
         }
         
-        function setMetaTags(e){
+        function setMetaTags(e, urlToUse){
             document.title=`${e.original_name} - Eberardos Gallery`;
-            const t=[{property:"og:title",content:`${e.original_name} - Eberardos Gallery`},{property:"og:description",content:"Lihat gambar ini di Eberardos Gallery"},{property:"og:image",content:e.url},{property:"og:url",content:window.location.href},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"},{name:"twitter:title",content:`${e.original_name} - Eberardos Gallery`},{name:"twitter:description",content:"Lihat gambar ini di Eberardos Gallery"},{name:"twitter:image",content:e.url}];
+            // Menggunakan urlToUse (quax_url) untuk meta tag
+            const t=[
+                {property:"og:title",content:`${e.original_name} - Eberardos Gallery`},
+                {property:"og:description",content:"Lihat gambar ini di Eberardos Gallery"},
+                {property:"og:image",content:urlToUse},
+                {property:"og:url",content:window.location.href},
+                {property:"og:type",content:"website"},
+                {name:"twitter:card",content:"summary_large_image"},
+                {name:"twitter:title",content:`${e.original_name} - Eberardos Gallery`},
+                {name:"twitter:description",content:"Lihat gambar ini di Eberardos Gallery"},
+                {name:"twitter:image",content:urlToUse}
+            ];
+            
             t.forEach(t=>{
                 let n=document.querySelector(`meta[property="${t.property}"]`)||document.querySelector(`meta[name="${t.name}"]`);
                 n||(n=document.createElement("meta"),t.property?n.setAttribute("property",t.property):t.name&&n.setAttribute("name",t.name),document.head.appendChild(n)),t.property?n.setAttribute("content",t.content):t.name&&n.setAttribute("content",t.content)
