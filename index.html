@@ -59,6 +59,7 @@
         // =======================================================
         const JSON_URL = 'https://raw.githubusercontent.com/gipicihuy/ebd-gallery/refs/heads/main/result-quax.json';
         const API_UPLOAD_ENDPOINT = '/api/upload-quax'; 
+        const API_SAVE_ENDPOINT = '/api/save-gallery-data'; // API Baru untuk menyimpan ke GitHub
         const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
         // =======================================================
@@ -111,7 +112,7 @@
         }
 
         function showStatus(message, type) {
-            statusMessage.textContent = message;
+            statusMessage.innerHTML = message; // Diubah ke innerHTML untuk support tag <a>
             statusMessage.className = "status-message";
             if (type) statusMessage.classList.add(type);
         }
@@ -134,10 +135,45 @@
         }
         
         function addNewItemToGallery(image) {
-            // Tambahkan gambar baru ke awal daftar (NON-PERSISTEN)
             galleryData.unshift(image); 
             renderGallery();
         }
+
+        // =======================================================
+        // FUNGSI BARU: SIMPAN DATA BARU KE GITHUB
+        // =======================================================
+        async function saveGalleryToGitHub(newEntry) {
+            try {
+                // Tunjukkan proses sedang menyimpan
+                showStatus(`Upload berhasil. Menyimpan data galeri permanen ke GitHub...`, "uploading");
+                progressBar.style.width = "70%";
+
+                const response = await fetch(API_SAVE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ newEntry: newEntry })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    progressBar.style.width = "100%";
+                    // Pesan sukses final
+                    const quaxUrl = newEntry.quax_url;
+                    showStatus(`Upload & Update Galeri **BERHASIL**! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
+                } else {
+                    console.error("Persistence failed:", result.details);
+                    // Tampilkan pesan error persistence
+                    showStatus(`Upload berhasil, tetapi **GAGAL** memperbarui galeri permanen: ${result.details}`, "error");
+                }
+            } catch (e) {
+                console.error("Critical Persistence Error:", e);
+                // Tampilkan pesan error persistence
+                showStatus(`Upload berhasil, tetapi **Gagal Total** memperbarui galeri permanen: ${e.message}`, "error");
+            }
+            uploadBtn.disabled = false; // Bolehkan upload lagi
+        }
+
 
         // =======================================================
         // UPLOAD FILE KE VERCEL API (QU.AX)
@@ -155,11 +191,13 @@
             showStatus("Memulai upload...", "uploading");
 
             try {
+                // 1. Baca file sebagai Base64
                 const base64File = await readFileAsBase64(selectedFile);
 
                 progressBar.style.width = "30%";
                 showStatus("Mengunggah ke Qu.ax via API Server...", "uploading");
 
+                // 2. Panggil Vercel API (API_UPLOAD_ENDPOINT)
                 const apiResponse = await fetch(API_UPLOAD_ENDPOINT, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -167,21 +205,17 @@
                 });
                 
                 let apiResult;
+                const clonedResponse = apiResponse.clone(); // Kloning respons untuk penanganan error body stream
                 
-                // Kloning respons. Ini memungkinkan kita membaca body respons asli (untuk JSON) 
-                // dan body kloning (untuk teks error) secara terpisah.
-                const clonedResponse = apiResponse.clone(); 
-                
-                // --- PERBAIKAN UNTUK MENGATASI "body stream already read" ---
+                // --- PENANGANAN ERROR UNTUK RESPONS NON-JSON (Mengatasi "Unexpected end of JSON input") ---
                 try {
-                    // 1. Coba baca respons sebagai JSON
+                    // Coba baca respons sebagai JSON
                     apiResult = await apiResponse.json();
                 } catch (e) {
-                    // 2. Jika gagal membaca sebagai JSON, baca respons KLONING sebagai teks
+                    // Jika gagal membaca sebagai JSON, baca respons KLONING sebagai teks
                     const responseText = await clonedResponse.text();
                     console.error("Respon Non-JSON/Error diterima:", responseText);
                     
-                    // Cek error umum Vercel/server
                     if (apiResponse.status === 504 || responseText.includes('504')) {
                         throw new Error("Vercel Gateway Timeout (504). Fungsi API terlalu lama. Coba file yang lebih kecil.");
                     }
@@ -189,29 +223,31 @@
                         throw new Error(`API tidak mengembalikan data. Pastikan Vercel API sudah ter-deploy dan tidak crash (Status: ${apiResponse.status}).`);
                     }
                     
-                    // Jika ada respons teks lain
                     throw new Error(`API mengembalikan respons non-JSON/invalid: ${responseText.substring(0, 50)}...`);
                 }
-                // --- AKHIR PERBAIKAN ---
+                // --- AKHIR PENANGANAN ERROR RESPONS ---
 
                 if (apiResult.success && apiResult.url) {
                     const quaxUrl = apiResult.url;
                     const originalFileName = customNameInput.value.trim() || selectedFile.name;
                     const shortCode = generateShortCode(); 
 
-                    progressBar.style.width = "100%";
-                    showStatus(`Upload berhasil! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
-                    
-                    addNewItemToGallery({
+                    // Siapkan data gambar baru
+                    const newImageEntry = {
                         id: Date.now(), 
                         original_name: originalFileName,
                         uploaded_at: new Date().toISOString(),
                         short_code: shortCode,
                         quax_url: quaxUrl,
-                    });
+                    };
 
+                    // 3. Tambahkan ke Galeri (sementara di browser)
+                    addNewItemToGallery(newImageEntry);
+                    
+                    // 4. Reset form dan panggil fungsi persistence (PERUBAHAN UTAMA)
                     resetForm();
-
+                    await saveGalleryToGitHub(newImageEntry); 
+                    
                 } else {
                     throw new Error(apiResult.details || 'Upload gagal - Tidak ada URL Qu.ax diterima.');
                 }
@@ -234,11 +270,9 @@
                 return;
             }
 
-            // Sortir data (yang terbaru di atas)
             galleryData.sort((a, b) => (b.id || b.idx) - (a.id || a.idx)); 
 
             galleryGrid.innerHTML = galleryData.map(image => {
-                // Gunakan quax_url jika ada, fallback ke url (data lama Supabase)
                 const displayUrl = image.quax_url || image.url; 
                 const uploadedDate = new Date(image.uploaded_at);
                 const formattedDate = uploadedDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
