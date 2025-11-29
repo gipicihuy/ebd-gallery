@@ -55,9 +55,8 @@
 
     <script>
         // =======================================================
-        // KONFIGURASI BARU (JSON_URL TIDAK DIPERLUKAN LAGI!)
+        // KONFIGURASI 
         // =======================================================
-        // JSON_URL tidak lagi digunakan, ganti ke folder 'uploads' di repo
         const API_UPLOAD_ENDPOINT = '/api/upload-github'; 
         const MAX_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB limit
         
@@ -117,7 +116,7 @@
             if (!file) return;
 
             if (file.size > MAX_FILE_SIZE) {
-                showStatus(`Ukuran file melebihi batas ${MAX_FILE_SIZE / 1024 / 1024}MB.`, "error");
+                showStatus(`Ukuran file melebihi batas ${(MAX_FILE_SIZE / 1024 / 1024).toFixed(2)}MB.`, "error");
                 selectedFile = null;
                 uploadBtn.disabled = true;
                 return;
@@ -136,7 +135,7 @@
         }
 
         // =======================================================
-        // UPLOAD FILE KE GITHUB VIA VERCEL API (BARU)
+        // UPLOAD FILE KE GITHUB VIA VERCEL API
         // =======================================================
 
         async function uploadFile() {
@@ -182,14 +181,24 @@
                 if (apiResult.success && apiResult.url) {
                     const githubUrl = apiResult.url;
                     
-                    // Data yang diterima sudah lengkap dari server, termasuk original_name
+                    // --- PERBAIKAN BUG `split` DIMULAI DI SINI ---
+                    // Dapatkan nama file dari URL untuk konsistensi struktur data
+                    const urlParts = githubUrl.split('/');
+                    const fileName = urlParts[urlParts.length - 1]; 
+                    
+                    // Data yang diterima sudah lengkap dari server
                     const newImageEntry = {
+                        // Struktur data baru, konsisten dengan format GitHub API
                         id: Date.now(), 
-                        original_name: apiResult.original_name, // Ambil dari server
-                        uploaded_at: apiResult.uploaded_at,    // Ambil dari server
-                        short_code: apiResult.short_code,      // Ambil dari server
-                        url: githubUrl,                        // Gunakan 'url' untuk kompatibilitas galeri
+                        name: fileName, // FIX: Sekarang objek memiliki properti 'name'
+                        download_url: githubUrl, // FIX: Menggunakan 'download_url'
+                        
+                        // Properti custom
+                        original_name: apiResult.original_name, 
+                        uploaded_at: apiResult.uploaded_at,    
+                        short_code: apiResult.short_code,      
                     };
+                    // --- PERBAIKAN BUG `split` BERAKHIR DI SINI ---
 
                     progressBar.style.width = "100%";
                     showStatus(`Upload ke GitHub **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
@@ -221,18 +230,18 @@
                 return;
             }
 
-            // TIDAK PERLU SORTING, KARENA DATA DIBAWAH ADALAH DAFTAR FILE
-            
+            // Sortir berdasarkan timestamp (nama file) terbaru di atas
+            galleryData.sort((a, b) => b.name.localeCompare(a.name)); 
+
             galleryGrid.innerHTML = galleryData.map(image => {
-                // URL diambil dari GITHUB_API_URL/filename.ext
-                const displayUrl = image.download_url; 
-                const fileName = image.name; // Contoh: 17123456789.jpg
+                const displayUrl = image.download_url; // Selalu pakai download_url
+                const fileName = image.name; 
                 
-                // Gunakan nama file sebagai short_code/ID. Anda bisa memperbaikinya nanti
-                const code = fileName.split('.')[0]; 
+                // Gunakan original_name jika ada (dari upload), atau buat dari fileName
+                const originalName = image.original_name || fileName.replace(/\.[^/.]+$/, ""); 
                 
-                // Tampilkan nama file tanpa extension sebagai original name sementara
-                const originalName = fileName.replace(/\.[^/.]+$/, ""); 
+                // Gunakan short_code jika ada (dari upload), atau buat dari fileName
+                const code = image.short_code || fileName.split('.')[0]; 
                 
                 if (!displayUrl || !code) return '';
 
