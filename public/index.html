@@ -54,7 +54,8 @@
     </div>
 
     <script>
-        const API_URL = '/api/images'; // Backend endpoint
+        // Detect API URL automatically
+        const API_URL = window.location.origin + '/api/images';
         const uploadArea = document.getElementById('upload-area');
         const fileInput = document.getElementById('file-input');
         const uploadBtn = document.getElementById('upload-btn');
