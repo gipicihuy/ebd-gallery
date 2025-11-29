@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/upload-quax",
+      "destination": "/api/upload-quax"
+    },
+    {
       "source": "/preview/:path*",
       "destination": "/preview/index.html"
     },
