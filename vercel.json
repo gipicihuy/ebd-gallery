@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/upload-quax",
-      "destination": "/api/upload-quax"
+      "source": "/api/upload-github",
+      "destination": "/api/upload-github"
     },
     {
       "source": "/preview/:path*",
