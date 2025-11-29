@@ -31,10 +31,8 @@
     </footer>
 
     <script>
-        // URL ke file JSON Anda
         const JSON_URL = 'https://raw.githubusercontent.com/gipicihuy/ebd-gallery/refs/heads/main/result-quax.json';
         
-        // Mendapatkan kode gambar dari path URL
         const pathSegments = window.location.pathname.split('/').filter(segment => segment);
         const imageCode = pathSegments[pathSegments.length - 1];
         
@@ -44,21 +42,18 @@
             if(!imageCode) return void showError("Kode gambar tidak valid.");
             
             try{
-                // Ambil data JSON
                 const response = await fetch(JSON_URL);
                 if (!response.ok) throw new Error("Gagal memuat data JSON.");
                 
                 const allImages = await response.json();
 
-                // Cari gambar berdasarkan short_code
                 const image = allImages.find(img => img.short_code === imageCode);
 
                 if(!image) {
                     return showError("Gambar tidak ditemukan.");
                 }
                 
-                // Gunakan quax_url, fallback ke url Supabase lama jika quax_url null
-                const displayUrl = image.quax_url || image.url;
+                const displayUrl = image.quax_url || image.url; // Pilih link Qu.ax atau Supabase
 
                 if (!displayUrl) {
                     return showError("URL gambar tidak ditemukan.");
@@ -76,17 +71,14 @@
             const t=new Date(e.uploaded_at);
             const n=t.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
             
-            // Menggunakan urlToUse (quax_url) untuk gambar
             imageContent.innerHTML=`<div class="image-container"><img src="${urlToUse}" alt="${e.original_name}" class="preview-image"></div><div class="image-info"><div class="image-name">${e.original_name}</div><div class="image-date">Diupload: ${n}</div></div>`;
             
-            // Menggunakan urlToUse (quax_url) untuk tombol download
             downloadBtn.onclick=function(){downloadImage(e, urlToUse)};
             actionButtons.style.display="block";
             setMetaTags(e, urlToUse);
         }
         
         function downloadImage(e, urlToDownload){
-            // Menggunakan urlToDownload (quax_url)
             fetch(urlToDownload).then(e=>e.blob()).then(t=>{
                 const n=URL.createObjectURL(t),o=document.createElement("a");
                 o.href=n,o.download=e.original_name||"download",document.body.appendChild(o),o.click(),setTimeout(()=>{document.body.removeChild(o),URL.revokeObjectURL(n)},100)
@@ -99,7 +91,6 @@
         
         function setMetaTags(e, urlToUse){
             document.title=`${e.original_name} - Eberardos Gallery`;
-            // Menggunakan urlToUse (quax_url) untuk meta tag
             const t=[
                 {property:"og:title",content:`${e.original_name} - Eberardos Gallery`},
                 {property:"og:description",content:"Lihat gambar ini di Eberardos Gallery"},
