@@ -1,12 +1,31 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/preview/:path*",
-      "destination": "/preview/index.html"
+      "src": "server.js",
+      "use": "@vercel/node"
     },
     {
-      "source": "/:path*",
-      "destination": "/index.html"
+      "src": "public/**",
+      "use": "@vercel/static"
     }
-  ]
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/preview/(.*)",
+      "dest": "/public/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/index.html"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": "3000"
+  }
 }
