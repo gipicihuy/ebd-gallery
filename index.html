@@ -155,29 +155,31 @@
             showStatus("Memulai upload...", "uploading");
 
             try {
-                // 1. Baca file sebagai Base64
                 const base64File = await readFileAsBase64(selectedFile);
 
                 progressBar.style.width = "30%";
                 showStatus("Mengunggah ke Qu.ax via API Server...", "uploading");
 
-                // 2. Panggil Vercel API (API_UPLOAD_ENDPOINT)
                 const apiResponse = await fetch(API_UPLOAD_ENDPOINT, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ file: base64File }) // Kirim Base64
+                    body: JSON.stringify({ file: base64File }) 
                 });
                 
                 let apiResult;
                 
-                // --- PENANGANAN ERROR UNTUK RESPONS NON-JSON (Mengatasi "Unexpected end of JSON input") ---
+                // Kloning respons. Ini memungkinkan kita membaca body respons asli (untuk JSON) 
+                // dan body kloning (untuk teks error) secara terpisah.
+                const clonedResponse = apiResponse.clone(); 
+                
+                // --- PERBAIKAN UNTUK MENGATASI "body stream already read" ---
                 try {
-                    // Coba baca respons sebagai JSON
+                    // 1. Coba baca respons sebagai JSON
                     apiResult = await apiResponse.json();
                 } catch (e) {
-                    // Jika gagal membaca sebagai JSON (misalnya respons kosong atau HTML error)
-                    const responseText = await apiResponse.text();
-                    console.error("Respon Non-JSON diterima:", responseText);
+                    // 2. Jika gagal membaca sebagai JSON, baca respons KLONING sebagai teks
+                    const responseText = await clonedResponse.text();
+                    console.error("Respon Non-JSON/Error diterima:", responseText);
                     
                     // Cek error umum Vercel/server
                     if (apiResponse.status === 504 || responseText.includes('504')) {
@@ -190,7 +192,7 @@
                     // Jika ada respons teks lain
                     throw new Error(`API mengembalikan respons non-JSON/invalid: ${responseText.substring(0, 50)}...`);
                 }
-                // --- AKHIR PENANGANAN ERROR RESPONS ---
+                // --- AKHIR PERBAIKAN ---
 
                 if (apiResult.success && apiResult.url) {
                     const quaxUrl = apiResult.url;
