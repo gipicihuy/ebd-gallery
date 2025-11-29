@@ -28,7 +28,7 @@
                 <input type="text" id="custom-name-input" placeholder="Masukkan nama file (opsional)">
             </div>
             
-            <p style="color: var(--gray); font-size: 0.85rem; margin-top: 15px;">Mendukung: JPG, PNG, GIF (Maks. 5MB)</p>
+            <p style="color: var(--gray); font-size: 0.85rem; margin-top: 15px;">Mendukung: JPG, PNG, GIF (Maks. 4.5MB)</p>
 
             <button id="upload-btn" class="upload-btn" disabled>
                 <i class="fas fa-upload"></i> Unggah Sekarang
@@ -55,12 +55,17 @@
 
     <script>
         // =======================================================
-        // KONFIGURASI
+        // KONFIGURASI BARU (JSON_URL TIDAK DIPERLUKAN LAGI!)
         // =======================================================
-        const JSON_URL = 'https://raw.githubusercontent.com/gipicihuy/ebd-gallery/refs/heads/main/result-quax.json';
-        const API_UPLOAD_ENDPOINT = '/api/upload-quax'; 
-        const API_SAVE_ENDPOINT = '/api/save-gallery-data'; // API Baru untuk menyimpan ke GitHub
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+        // JSON_URL tidak lagi digunakan, ganti ke folder 'uploads' di repo
+        const API_UPLOAD_ENDPOINT = '/api/upload-github'; 
+        const MAX_FILE_SIZE = 4.5 * 1024 * 1024; // 4.5MB limit
+        
+        // Konfigurasi Repo untuk load galeri dari folder (Raw GitHub Content URL)
+        const REPO_OWNER = 'gipicihuy'; 
+        const REPO_NAME = 'ebd-gallery';
+        const REPO_BRANCH = 'main'; // Sesuaikan jika branch Anda 'master'
+        const GITHUB_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/uploads`;
 
         // =======================================================
 
@@ -79,15 +84,6 @@
         // =======================================================
         // FUNGSI UTILITY
         // =======================================================
-
-        function generateShortCode(length = 6) {
-            const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
-            let result = '';
-            for (let i = 0; i < length; i++) {
-                result += characters.charAt(Math.floor(Math.random() * characters.length));
-            }
-            return result;
-        }
 
         function readFileAsBase64(file) {
             return new Promise((resolve, reject) => {
@@ -112,7 +108,7 @@
         }
 
         function showStatus(message, type) {
-            statusMessage.innerHTML = message; // Diubah ke innerHTML untuk support tag <a>
+            statusMessage.innerHTML = message;
             statusMessage.className = "status-message";
             if (type) statusMessage.classList.add(type);
         }
@@ -140,43 +136,7 @@
         }
 
         // =======================================================
-        // FUNGSI BARU: SIMPAN DATA BARU KE GITHUB
-        // =======================================================
-        async function saveGalleryToGitHub(newEntry) {
-            try {
-                // Tunjukkan proses sedang menyimpan
-                showStatus(`Upload berhasil. Menyimpan data galeri permanen ke GitHub...`, "uploading");
-                progressBar.style.width = "70%";
-
-                const response = await fetch(API_SAVE_ENDPOINT, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ newEntry: newEntry })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    progressBar.style.width = "100%";
-                    // Pesan sukses final
-                    const quaxUrl = newEntry.quax_url;
-                    showStatus(`Upload & Update Galeri **BERHASIL**! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
-                } else {
-                    console.error("Persistence failed:", result.details);
-                    // Tampilkan pesan error persistence
-                    showStatus(`Upload berhasil, tetapi **GAGAL** memperbarui galeri permanen: ${result.details}`, "error");
-                }
-            } catch (e) {
-                console.error("Critical Persistence Error:", e);
-                // Tampilkan pesan error persistence
-                showStatus(`Upload berhasil, tetapi **Gagal Total** memperbarui galeri permanen: ${e.message}`, "error");
-            }
-            uploadBtn.disabled = false; // Bolehkan upload lagi
-        }
-
-
-        // =======================================================
-        // UPLOAD FILE KE VERCEL API (QU.AX)
+        // UPLOAD FILE KE GITHUB VIA VERCEL API (BARU)
         // =======================================================
 
         async function uploadFile() {
@@ -194,62 +154,53 @@
                 // 1. Baca file sebagai Base64
                 const base64File = await readFileAsBase64(selectedFile);
 
-                progressBar.style.width = "30%";
-                showStatus("Mengunggah ke Qu.ax via API Server...", "uploading");
+                progressBar.style.width = "40%";
+                showStatus("Mengunggah dan menyimpan permanen ke GitHub...", "uploading");
 
-                // 2. Panggil Vercel API (API_UPLOAD_ENDPOINT)
+                // 2. Panggil Vercel API (api/upload-github)
                 const apiResponse = await fetch(API_UPLOAD_ENDPOINT, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ file: base64File }) 
+                    body: JSON.stringify({ 
+                        file: base64File,
+                        custom_name: customNameInput.value.trim() 
+                    }) 
                 });
                 
                 let apiResult;
-                const clonedResponse = apiResponse.clone(); // Kloning respons untuk penanganan error body stream
+                const clonedResponse = apiResponse.clone();
                 
-                // --- PENANGANAN ERROR UNTUK RESPONS NON-JSON (Mengatasi "Unexpected end of JSON input") ---
+                // Penanganan Error Respons
                 try {
-                    // Coba baca respons sebagai JSON
                     apiResult = await apiResponse.json();
                 } catch (e) {
-                    // Jika gagal membaca sebagai JSON, baca respons KLONING sebagai teks
                     const responseText = await clonedResponse.text();
                     console.error("Respon Non-JSON/Error diterima:", responseText);
-                    
-                    if (apiResponse.status === 504 || responseText.includes('504')) {
-                        throw new Error("Vercel Gateway Timeout (504). Fungsi API terlalu lama. Coba file yang lebih kecil.");
-                    }
-                    if (responseText.length === 0) {
-                        throw new Error(`API tidak mengembalikan data. Pastikan Vercel API sudah ter-deploy dan tidak crash (Status: ${apiResponse.status}).`);
-                    }
-                    
                     throw new Error(`API mengembalikan respons non-JSON/invalid: ${responseText.substring(0, 50)}...`);
                 }
-                // --- AKHIR PENANGANAN ERROR RESPONS ---
 
                 if (apiResult.success && apiResult.url) {
-                    const quaxUrl = apiResult.url;
-                    const originalFileName = customNameInput.value.trim() || selectedFile.name;
-                    const shortCode = generateShortCode(); 
-
-                    // Siapkan data gambar baru
+                    const githubUrl = apiResult.url;
+                    
+                    // Data yang diterima sudah lengkap dari server, termasuk original_name
                     const newImageEntry = {
                         id: Date.now(), 
-                        original_name: originalFileName,
-                        uploaded_at: new Date().toISOString(),
-                        short_code: shortCode,
-                        quax_url: quaxUrl,
+                        original_name: apiResult.original_name, // Ambil dari server
+                        uploaded_at: apiResult.uploaded_at,    // Ambil dari server
+                        short_code: apiResult.short_code,      // Ambil dari server
+                        url: githubUrl,                        // Gunakan 'url' untuk kompatibilitas galeri
                     };
 
-                    // 3. Tambahkan ke Galeri (sementara di browser)
+                    progressBar.style.width = "100%";
+                    showStatus(`Upload ke GitHub **BERHASIL**! Link: <a href="${githubUrl}" target="_blank">${githubUrl}</a>`, "success");
+                    
+                    // 3. Tambahkan ke Galeri (permanen karena data sudah di repo)
                     addNewItemToGallery(newImageEntry);
                     
-                    // 4. Reset form dan panggil fungsi persistence (PERUBAHAN UTAMA)
                     resetForm();
-                    await saveGalleryToGitHub(newImageEntry); 
-                    
+
                 } else {
-                    throw new Error(apiResult.details || 'Upload gagal - Tidak ada URL Qu.ax diterima.');
+                    throw new Error(apiResult.details || 'Upload gagal - Tidak ada URL GitHub diterima.');
                 }
 
             } catch (e) {
@@ -261,7 +212,7 @@
         }
 
         // =======================================================
-        // LOAD & RENDER GALLERY
+        // LOAD & RENDER GALLERY (MEMBACA DARI FOLDER UPLOADS GITHUB)
         // =======================================================
         
         function renderGallery() {
@@ -270,25 +221,30 @@
                 return;
             }
 
-            galleryData.sort((a, b) => (b.id || b.idx) - (a.id || a.idx)); 
-
+            // TIDAK PERLU SORTING, KARENA DATA DIBAWAH ADALAH DAFTAR FILE
+            
             galleryGrid.innerHTML = galleryData.map(image => {
-                const displayUrl = image.quax_url || image.url; 
-                const uploadedDate = new Date(image.uploaded_at);
-                const formattedDate = uploadedDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-                const code = image.short_code || image.id;
-
+                // URL diambil dari GITHUB_API_URL/filename.ext
+                const displayUrl = image.download_url; 
+                const fileName = image.name; // Contoh: 17123456789.jpg
+                
+                // Gunakan nama file sebagai short_code/ID. Anda bisa memperbaikinya nanti
+                const code = fileName.split('.')[0]; 
+                
+                // Tampilkan nama file tanpa extension sebagai original name sementara
+                const originalName = fileName.replace(/\.[^/.]+$/, ""); 
+                
                 if (!displayUrl || !code) return '';
 
                 return `
                     <div class="gallery-item" data-shortcode="${code}">
-                        <a href="/preview/${code}" class="item-link">
+                        <a href="${displayUrl}" target="_blank" class="item-link">
                             <div class="item-image-wrapper">
-                                <img src="${displayUrl}" alt="${image.original_name}" loading="lazy" class="item-image">
+                                <img src="${displayUrl}" alt="${originalName}" loading="lazy" class="item-image">
                             </div>
                             <div class="item-info">
-                                <div class="item-name">${image.original_name}</div>
-                                <div class="item-date">Diunggah: ${formattedDate}</div>
+                                <div class="item-name">${originalName}</div>
+                                <div class="item-date">File: ${fileName}</div>
                             </div>
                         </a>
                     </div>
@@ -297,18 +253,29 @@
         }
 
         async function loadGallery(){
-            galleryGrid.innerHTML = `<div class="loading"></div><p>Memuat galeri...</p>`;
+            galleryGrid.innerHTML = `<div class="loading"></div><p>Memuat galeri dari GitHub...</p>`;
             try {
-                const response = await fetch(JSON_URL);
-                if (!response.ok) throw new Error("Gagal memuat data galeri dari JSON.");
+                // Memanggil GitHub API untuk mendapatkan daftar file di folder /uploads
+                const response = await fetch(GITHUB_API_URL);
                 
-                galleryData = await response.json();
+                if (!response.ok) {
+                    throw new Error(`Gagal memuat daftar file dari GitHub API. Status: ${response.status}. Pastikan folder 'uploads' ada dan GITHUB_TOKEN memiliki izin repo.`);
+                }
                 
+                // Respons adalah array objek file dari GitHub API
+                const fileList = await response.json();
+                
+                // Filter hanya file gambar dan simpan ke galleryData
+                galleryData = fileList.filter(item => item.type === 'file' && item.name.match(/\.(jpe?g|png|gif)$/i));
+                
+                // Sortir berdasarkan timestamp (nama file) terbaru di atas
+                galleryData.sort((a, b) => b.name.localeCompare(a.name)); 
+
                 renderGallery();
 
             } catch(e) {
                 console.error("Error loading gallery:", e);
-                galleryGrid.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-circle"></i><p>Gagal memuat galeri. ${e.message}</p></div>`;
+                galleryGrid.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-circle"></i><p>Gagal memuat galeri dari GitHub. ${e.message}</p></div>`;
             }
         }
 
