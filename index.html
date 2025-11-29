@@ -168,7 +168,29 @@
                     body: JSON.stringify({ file: base64File }) // Kirim Base64
                 });
                 
-                const apiResult = await apiResponse.json();
+                let apiResult;
+                
+                // --- PENANGANAN ERROR UNTUK RESPONS NON-JSON (Mengatasi "Unexpected end of JSON input") ---
+                try {
+                    // Coba baca respons sebagai JSON
+                    apiResult = await apiResponse.json();
+                } catch (e) {
+                    // Jika gagal membaca sebagai JSON (misalnya respons kosong atau HTML error)
+                    const responseText = await apiResponse.text();
+                    console.error("Respon Non-JSON diterima:", responseText);
+                    
+                    // Cek error umum Vercel/server
+                    if (apiResponse.status === 504 || responseText.includes('504')) {
+                        throw new Error("Vercel Gateway Timeout (504). Fungsi API terlalu lama. Coba file yang lebih kecil.");
+                    }
+                    if (responseText.length === 0) {
+                        throw new Error(`API tidak mengembalikan data. Pastikan Vercel API sudah ter-deploy dan tidak crash (Status: ${apiResponse.status}).`);
+                    }
+                    
+                    // Jika ada respons teks lain
+                    throw new Error(`API mengembalikan respons non-JSON/invalid: ${responseText.substring(0, 50)}...`);
+                }
+                // --- AKHIR PENANGANAN ERROR RESPONS ---
 
                 if (apiResult.success && apiResult.url) {
                     const quaxUrl = apiResult.url;
@@ -178,7 +200,6 @@
                     progressBar.style.width = "100%";
                     showStatus(`Upload berhasil! Link: <a href="${quaxUrl}" target="_blank">${quaxUrl}</a>`, "success");
                     
-                    // 3. Tambahkan ke Galeri (NON-PERSISTEN)
                     addNewItemToGallery({
                         id: Date.now(), 
                         original_name: originalFileName,
