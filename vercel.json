@@ -1,26 +1,12 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/handler.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/handler.js"
+      "source": "/preview/:path*",
+      "destination": "/preview/index.html"
     },
     {
-      "src": "/public/(.*)",
-      "dest": "/public/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/index.html"
+      "source": "/:path*",
+      "destination": "/index.html"
     }
-  ],
-  "env": {
-    "WEBSITE_BASE_URL": "@website_base_url"
-  }
+  ]
 }
